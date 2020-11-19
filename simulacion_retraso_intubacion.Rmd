@@ -1,0 +1,77 @@
+---
+title: "SIMULACION RETRASO INTUBACION"
+output: html_notebook
+---
+
+Simulación temporal de la evolucion de los pacientes intubados segun el momento
+
+```{r}
+#Ajuste de la curva de lognormal a lo que queremos (maximo efecto a los 15 días)
+#Calculamos sdlog para una media de 3 (ojimetro tras varias pruebas)
+sqrt(3.0 - log(15))
+```
+
+
+```{r}
+inicio_vm = 20
+log_norm <- function(x) {
+  100 * dlnorm(x,meanlog = 3.0,sdlog=0.54)
+}
+ef_vm <- function(x,delay) {
+  ifelse(x>delay,0.5 * log_norm(x-delay),0)
+}
+
+ef_vm_2 <- function(x,delay) {
+  
+  ifelse(x>delay,0.05 * (x-delay),0)
+}
+
+suma_ef <- function(x,delay=inicio_vm) {
+  ef_vm_2(x,delay) + log_norm(x)
+}
+
+curve(suma_ef,from=0,to=100)
+curve(log_norm,from=0,to=100,add=TRUE)
+abline(h = 3,col="red")
+
+```
+Ahora que ya hemos aproximado con las curvas, hacemos una simulación temporal
+```{r}
+dias <- seq(1,100,by=1)
+efecto_cv <- numeric(length(dias))
+efecto_vm <- numeric(length(dias))
+efecto_total <- numeric(length(dias))
+efecto_vm[1] <- 0.0
+efecto_cv[1] <- 0.0
+efecto_total[1] <- 0.0
+en_vm <- FALSE
+umbral <- 3.0
+factor_vm <- 0.022
+factor_no_vm <- -0.02
+factor_covid <- 1.0
+inicio_vm <- 14 #Si utilizamos 8 dias como inicio de la vm, la linea de puntos no pasa por debajo de la 
+                #linea verde que representa el umbral de lesion pulmonar que permite la extubacion
+
+for(i in 2:length(dias)) {
+  efecto_cv[i] <- factor_covid * log_norm(i)
+  if(en_vm) efecto_vm[i] <- efecto_vm[i-1] + factor_vm * efecto_total[i-1]
+  else efecto_vm[i] <- efecto_vm[i-1] + ifelse(i<inicio_vm,0,factor_no_vm) * efecto_total[i-1]
+  if(i >= inicio_vm) en_vm <- TRUE
+  efecto_total[i] <- efecto_vm[i] + efecto_cv[i]
+  if(efecto_total[i] < 3) en_vm <- FALSE
+}
+
+plot(NULL,xlim=c(0,100),ylim=c(0,8),
+     main="INICIO DE VENT MEC A LOS 14 DIAS",
+     xlab="Días desde el inicio del cuadro",ylab="Daño pulmonar")
+lines(dias,efecto_total,col="black")
+lines(dias,efecto_vm,col="red")
+lines(dias,efecto_cv,col="blue")
+abline(h=3,col="darkgreen")
+legend(x=40,y=8,title = "Daño pulmonar",
+       fill = c("black","red","blue"),legend=c("TOTAL","VENT_MEC","COVID"))
+#arrows(x0=32,y0=5,x1 = 32,y1=3,lwd=2)
+text(labels=c("Umbral de extubación"),x=80,y=2.7)
+```
+
+
